@@ -1,0 +1,21 @@
+#SampleID	BarcodeSequence	LinkerPrimerSequence	Treatment	Category	NTM_culture	SampleName	Description
+HIsoil01			sample	sample	positive	12_2	HIsoil01
+HIsoil02			sample	sample	positive	12_4	HIsoil02
+HIsoil03			sample	sample	positive	12_6	HIsoil03
+HIsoil04			sample	sample	positive	12_7	HIsoil04
+HIsoil05			sample	sample	positive	12_22	HIsoil05
+HIsoil06			sample	sample	positive	12_25	HIsoil06
+HIsoil07			sample	sample	positive	12_26	HIsoil07
+HIsoil08			sample	sample	positive	12_29	HIsoil08
+HIsoil09			sample	sample	positive	12_56	HIsoil09
+HIsoil10			sample	sample	positive	12_57	HIsoil10
+HIsoil11			sample	sample	negative	12_30	HIsoil11
+HIsoil12			sample	sample	negative	12_32	HIsoil12
+HIsoil13			sample	sample	negative	12_33	HIsoil13
+HIsoil14			sample	sample	negative	12_36	HIsoil14
+HIsoil15			sample	sample	negative	12_37	HIsoil15
+HIsoil16			sample	sample	negative	12_39	HIsoil16
+HIsoil17			sample	sample	negative	12_40	HIsoil17
+HIsoil18			sample	sample	negative	12_46	HIsoil18
+HIsoil19			sample	sample	negative	12_51	HIsoil19
+HIsoil20			sample	sample	negative	12_55	HIsoil20

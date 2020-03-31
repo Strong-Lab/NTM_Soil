@@ -1,0 +1,524 @@
+---
+title: "Soil Rarified"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    theme: united
+---
+
+
+```{r, include=FALSE}
+#library(phyloseq)
+#library(ggplot2)
+#library(biomformat)
+#library(vegan)
+#library(devtools)
+#install_version("vegan", version ="2.4-5", repos = "http://cran.us.r-project.org")
+#source("https://raw.githubusercontent.com/joey711/phyloseq/master/inst/scripts/installer.R",local = TRUE)
+
+#BiocManager::install("phyloseq")
+#install_phyloseq(branch = "github")
+library(arules)
+library(phyloseq)
+library(ggplot2)
+library(dplyr)
+library(vegan)
+library(stringr)
+library(DESeq2)
+library(EMA)
+library(reshape2)
+```
+
+```{r warning=FALSE, echo=FALSE}
+library(phyloseq)
+library(ggplot2)
+library(dplyr)
+library(vegan)
+library(stringr)
+library(DESeq2)
+library(EMA)
+library(reshape2)
+library(extrafont)
+font_import()
+#fonts()
+
+## Helper Functions
+ci = function(x){mean(x)+c(-1.96,1.96)*sd(x)/sqrt(length(x))}
+```
+
+
+```{r warning=FALSE, echo=FALSE}
+load("../data/DADA2_Processed/Taxa_Silva_8_18_Hawaiian.RData")
+load("../data/DADA2_Processed/seqtabnochim_8_18_Hawaiian.RData")
+
+labels = read.csv("../data/DADA2_Processed/NTM_Count_Bi.csv")
+
+## Remove samples not in soil chemistry
+labels_to_remove = c("12_56", "12_7")
+labels = subset(labels, !(SampleName %in% labels_to_remove))
+
+## Remove NTC Control from Count Table
+#seqtab.nochim = seqtab.nochim[-1,]
+
+## Remove Samples not in Soil Chemistry
+#HNL 12-56 & HNL 12-7 
+rows_to_remove = c("HIsoil04", "HIsoil09", "HIsoil00")
+seqtab.nochim = subset(seqtab.nochim, !(rownames(seqtab.nochim) %in% rows_to_remove))
+
+
+empties = (colSums(seqtab.nochim) != 0)
+seqtab.nochim = seqtab.nochim[, empties]
+
+#unique_genus = as.data.frame(unique(taxa_silva[,6]))
+
+## Load Metadata and edit naming
+samdf = read.csv(file = "../data/DADA2_Processed/metadata.txt", sep='\t', header = T, stringsAsFactors = FALSE)
+row.names(samdf) = samdf$X.SampleID
+samdf = subset(samdf, !(rownames(samdf) %in% rows_to_remove))
+
+rownames(labels) = labels$SampleName
+labels$SampleName = NULL
+samdf = cbind(samdf, labels)
+
+samdf$SampleName = paste('HNL ',samdf$SampleName, sep = "")
+samdf$SampleName = lapply(samdf$SampleName, function(x){
+  gsub("_", "-", x)
+})
+
+## Filter Tax Table
+x = colnames(seqtab.nochim)
+taxa_silva = taxa_silva[rownames(taxa_silva) %in% x,]
+
+## Create Phyloseq Object
+ps = phyloseq(otu_table(seqtab.nochim,taxa_are_rows = FALSE),sample_data(samdf), tax_table(taxa_silva))
+
+set.seed(1)
+#rowSums(seqtab.nochim)
+ps_rarified = rarefy_even_depth(ps,sample.size = 9214, verbose = F)
+```
+
+### Rarifiy OTU Table
+The following displays the differences in dimensions following rarification. All "OTUs" in the following analysis are based off core sequence variants identified from the DADA2 Pipeline. The taxonomy in the taxa plots are based off classification using the RDP Classifier against the Silva Database. 
+```{r warning=FALSE, echo=FALSE}
+## Raw
+dim(ps@otu_table)
+
+## Rarified
+dim(ps_rarified@otu_table)
+
+b2 = tax_glom(ps_rarified, taxrank = "Phylum")
+Phylum10 = names(sort(taxa_sums(b2), TRUE)[1:6])
+x2 = prune_taxa(Phylum10, b2)
+## Normalize
+ps_n  = transform_sample_counts(x2, function(x) x / sum(x))
+```
+
+
+
+### Correlate OTU with Outcome Variable
+Using DeSeq2 (Negative Binomial Correlation), only one genera is differentially expressed between NTM culture status, Actinomycetospora. 
+```{r warning=FALSE, echo=FALSE}
+diagdds = phyloseq_to_deseq2(x2, ~NTM_culture)
+# gm_mean = function(x, na.rm=TRUE){
+#   exp(sum(log(x[x > 0]), na.rm=na.rm) / length(x))
+# }
+# 
+# geoMeans = apply(counts(diagdds), 1, gm_mean)
+# diagdds = estimateSizeFactors(diagdds, geoMeans = geoMeans)
+# diagdds = DESeq(diagdds, fitType="local")
+# 
+# res = results(diagdds)
+# res = res[order(res$padj, na.last=NA), ]
+# alpha = 0.01
+# sigtab = as.data.frame(res[(res$padj < alpha), ])
+# vacuuming_sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps_rarified)[rownames(sigtab), ], "matrix"))
+
+
+Actino = subset_taxa(ps_rarified, Genus=="Actinomycetospora")
+
+
+png('../Images/Actinomycetospora.png', units="in", width=6, height=8, res=600)
+p = plot_bar(Actino, x="NTM_culture", fill = "NTM_culture")
+
+p + theme_bw() + geom_bar(aes(color=NTM_culture, fill=NTM_culture), stat="identity", position="stack", show.legend = F)+ scale_fill_discrete(breaks = "Actinomycetospora") + labs(title="Total Actinomycetospora Counts by NTM Culture Status", family="Arial") + scale_x_discrete(labels= c("Negative\nCulture", "Positive\nCulture")) + theme(axis.text=element_text(size=18),axis.title=element_text(size=14,face="bold", family="Arial"), axis.text.x = element_text(angle = 0, hjust = .5, face="bold", family = "Arial", size = 16)) + ylab("Read Abundance") + xlab("") 
+dev.off()
+```
+
+```{r}
+Actino = subset_taxa(ps_n, Phylum=="Firmicutes")
+
+
+png('../Images/Firmicutes.png', units="in", width=6, height=8, res=1200)
+p = plot_bar(Actino, x="NTM_culture", fill = "NTM_culture")
+
+p + geom_bar(aes(color=NTM_culture, fill=NTM_culture), stat="identity", position="stack", show.legend = F)+ scale_fill_discrete(breaks = "Firmicutes") + labs(title="Total Firmicutes Counts by NTM Culture Status", family="Arial") + scale_x_discrete(labels= c("Negative\nCulture", "Positive\nCulture")) + theme(axis.text=element_text(size=18),axis.title=element_text(size=14,face="bold", family="Arial"), axis.text.x = element_text(angle = 0, hjust = .5, face="bold", family = "Arial", size = 16)) + ylab("Read Abundance") + xlab("")  + theme_bw()
+dev.off()
+```
+
+
+#### Culture Status
+The following correlations is nonparametric spearman correlations between normalized OTU counts and the response variable. Variibacter is apart of Bradyrhizobiaceae like the other significantly negatively associated bacterial genus Bradyrhizobium.
+```{r warning=FALSE, echo=FALSE}
+level = ifelse(samdf$NTM_culture=="positive", 1, 0)
+
+M = cor(as.matrix(otu_table(ps_rarified)), level, method = "spearman")
+M = as.data.frame(M)
+
+vals = c()
+my_fun<-function(x){
+  vals = c(vals, cor.test(x, level)[['p.value']])
+}
+
+y = as.data.frame(otu_table(ps_rarified))
+
+M$p_value = sapply(y, my_fun)
+M$sequence = rownames(M)
+
+significant = filter(M, p_value < 0.05)
+
+list_of_seqs = significant$sequence
+taxa_silva = as.data.frame(taxa_silva)
+taxa = taxa_silva[rownames(taxa_silva) %in% list_of_seqs==TRUE, ]
+
+taxa$sequence = rownames(taxa)
+Significance = merge(significant, taxa, by='sequence')
+
+test = Significance[,2:length(Significance)]
+test = na.omit(test, cols = c("Genus"))
+knitr::kable(test)
+```
+
+#### Correlation with Discretized Count
+Polycyclic aromatic hydrocarbons (PAH) are degraded by organisms like Mycobacterium,  Sphingomonas, and Nitrospira. Seeing correlation between abundances is expected. 
+```{r warning=FALSE, echo=FALSE}
+level = ifelse(samdf$NTM_Counts_Categories=="High", 1, 0)
+
+M = cor(as.matrix(otu_table(ps_n)), level, method = "spearman")
+M = as.data.frame(M)
+
+vals = c()
+my_fun<-function(x){
+  vals = c(vals, cor.test(x, level)[['p.value']])
+}
+
+y = as.data.frame(otu_table(ps_rarified))
+
+M$p_value = sapply(y, my_fun)
+M$sequence = rownames(M)
+
+significant = filter(M, p_value < 0.05)
+
+list_of_seqs = significant$sequence
+taxa_silva = as.data.frame(taxa_silva)
+taxa = taxa_silva[rownames(taxa_silva) %in% list_of_seqs==TRUE, ]
+
+taxa$sequence = rownames(taxa)
+Significance = merge(significant, taxa, by='sequence')
+
+test = Significance[,2:length(Significance)]
+
+test = na.omit(test, cols = c("Genus"))
+knitr::kable(test)
+```
+
+
+### Alpha Diversity
+```{r, echo=FALSE}
+erich <- estimate_richness(ps_rarified, measures = c("Observed", "Shannon", "Simpson", "Fisher"))
+ttest <- t(sapply(erich, function(x) unlist(t.test(x~sample_data(ps_rarified)$NTM_Counts_Categories)[c("estimate","p.value","statistic","conf.int")])))
+
+ttest2 <- t(sapply(erich, function(x) unlist(t.test(x~sample_data(ps_rarified)$NTM_culture)[c("estimate","p.value","statistic","conf.int")])))
+erich["X.SampleID"] = rownames(erich)
+erich2 = as.data.frame(erich)
+x = sample_data(ps_rarified)
+names = x$SampleName
+names = unlist(names)
+erich["SampleName"] = names
+colsto = c("SampleName", "Shannon")
+y2 = erich[colnames(erich) %in% colsto]
+
+write.csv(y2, "../data/DADA2_Processed/ShannonValues.csv", quote = F, row.names = F)
+```
+
+
+### Merge pH, Alpha Diversity
+```{r}
+soil = read.csv("../data/DADA2_Processed/Soil_Scaled.csv", stringsAsFactors = F)
+soil = soil[soil$Microbiome==1,]
+df_soil = merge(soil, samdf, by.x="Soil_Sample", by.y="SampleName")
+df_soil2 = merge(df_soil, erich, by.x="Soil_Sample", by.y="SampleName")
+
+
+shapiro.test(df_soil2$pH)
+shapiro.test(df_soil2$Shannon)
+x = lm(Shannon~pH, data = df_soil2)
+
+
+cor(df_soil2$pH, df_soil2$Shannon)
+
+
+q = wilcox.test(df_soil2$Shannon ~ df_soil2$NTM_Counts_Categories, exact = F, conf.int=T, conf.level=.95)
+q = wilcox.test(df_soil2$Shannon ~ df_soil2$NTM_culture, exact = F, conf.int=T, conf.level=.95)
+q
+summary(x)
+```
+
+
+
+```{r, echo=FALSE}
+my_plot_bar = function (physeq, x = "Sample", y = "Abundance", fill = NULL, title = NULL, 
+                        facet_grid = NULL) {
+    mdf = psmelt(physeq)
+    p = ggplot(mdf, aes_string(x = x, y = y, fill = fill))
+    p = p + geom_bar(stat = "identity", position = "stack", show.legend = T)
+    p = p + theme(axis.text.x = element_text(angle = -90, hjust = 0))
+    if (!is.null(facet_grid)) {
+        p <- p + facet_grid(facet_grid)
+    }
+    if (!is.null(title)) {
+        p <- p + ggtitle(title)
+    }
+    return(p)
+}
+```
+
+
+The alpha diversity (higher on the y axis means the more diverse the distribution of taxa)
+
+```{r fig.width=12, fig.height=6, echo=FALSE}
+x = estimate_richness(ps_n, measures = c("Shannon"))
+samdf = ps_n@sam_data
+vac_dust = samdf[, c("NTM_culture", "NTM_Counts_Categories")]
+vac = merge(x, vac_dust, by = 0)
+
+## Change Culture Status
+nos = vac[vac$NTM_culture == "negative",]
+yes = vac[vac$NTM_culture == "positive",]
+
+ci_no = ci(nos$Shannon)
+ci_yes = ci(yes$Shannon)
+mean_no = mean(nos$Shannon)
+no_value = mean(nos$Shannon)*sd(nos$Shannon)/sqrt(length(nos$Shannon))
+paste(as.character(mean_no), " +/- ", as.character(no_value), sep = "")
+mean_yes = mean(yes$Shannon)
+yes_value = mean(yes$Shannon)*sd(yes$Shannon)/sqrt(length(yes$Shannon))
+paste(as.character(mean_yes), " +/- ", as.character(yes_value), sep = "")
+nos_vec = as.data.frame(c(mean_no, ci_no))
+yes_vec = c(mean_yes, ci_yes)
+nos_vec = cbind(nos_vec, yes_vec)
+
+## Change Group
+colnames(nos_vec) = c("Negative", "Positive")
+
+nos_vec = as.data.frame(t(nos_vec))
+colnames(nos_vec) = c("Mean", "Lower_CI", "Upper_CI")
+nos_vec$Group = rownames(nos_vec)
+nos_vec$Feature = "NTM Culture Status"
+nos_melted = melt(nos_vec, "Group")
+
+total_cis = nos_vec
+# 
+# ## Change NTM Status
+# nos = vac[vac$NTM_Counts_Categories == "Low",]
+# yes = vac[vac$NTM_Counts_Categories == "High",]
+# 
+# 
+# ci_no = ci(nos$Shannon)
+# ci_yes = ci(yes$Shannon)
+# mean_no = mean(nos$Shannon)
+# no_value = mean(nos$Shannon)*sd(nos$Shannon)/sqrt(length(nos$Shannon))
+# 
+# mean_yes = mean(yes$Shannon)
+# yes_value = mean(yes$Shannon)*sd(yes$Shannon)/sqrt(length(yes$Shannon))
+# 
+# nos_vec = as.data.frame(c(mean_no, ci_no))
+# yes_vec = c(mean_yes, ci_yes)
+# nos_vec = cbind(nos_vec, yes_vec)
+# colnames(nos_vec) = c("Low", "High")
+# 
+# nos_vec = as.data.frame(t(nos_vec))
+# colnames(nos_vec) = c("Mean", "Lower_CI", "Upper_CI")
+# nos_vec$Group = rownames(nos_vec)
+# nos_vec$Feature = "Discretized NTM Microbiome Counts"
+# nos_melted = melt(nos_vec, "Group")
+# 
+# total_cis = rbind(total_cis, nos_vec)
+# total_cis = nos_vec
+
+png('../Images/AlphaDiversityCulture.png', units="in", width=5, height=8, res=600)
+limits <- aes(ymax = total_cis$Upper_CI,ymin = total_cis$Lower_CI)
+
+p <- ggplot(data = total_cis, aes(x = Feature, y = Mean, fill = Group))
+p + geom_bar(stat = "identity",position = position_dodge(0.9), show.legend = F) + geom_errorbar(limits, position = position_dodge(0.9),width = 0.25) + geom_text(aes(Feature,-.1, label = Group), position = position_dodge2(width=0.9, padding = 2),  size=6) + scale_fill_manual(values=c("#4863A0", "#FFF380")) + theme_bw() + theme(axis.text.y = element_text(colour="grey20",size=18,angle=0,hjust=1,vjust=0,face="plain", family = "Arial"),
+                                                                      axis.title.y = element_text(colour="grey20",size=18,angle=90,hjust=.5,vjust=.5,face="plain", family = "Arial"),
+                                                                      axis.text.x = element_text(colour="grey20",size=18,angle=0,hjust=0.5,vjust=0,face="plain", family = "Arial"),
+                                                                      axis.title.x = element_text(colour="grey20",size=18,angle=0,hjust=.5,vjust=.5,face="plain", family = "Arial")) + xlab("") + ylab("Shannon Diversity Index") +ggtitle("Alpha Diversity by Mycobacterium Culture Status")
+# 
+# 
+dev.off()
+```
+
+### Beta Diversity
+To explore Beta Diversity, PCoA clusting of the rarified data is performed. Bray-Curtis is the distance metric utilized for the beta diversity analysis. 
+
+#### Beta Diversity by Culture Status and NTM Counts
+
+```{r fig.width=12, fig.height=6, echo=FALSE}
+ordinal = ordinate(ps_rarified, method = "PCoA", distance = "bray")
+p7 = plot_ordination(ps_rarified, ordinal, type = "samples", color = "NTM_culture", shape = "NTM_Counts_Categories", title = "Beta Diversity by Culture Status")
+p7 + geom_point(size=7, alpha=0.75)
+```
+
+Adonis test rejects the NULL hypothesis that the distance within groups of NTM Culture Status is from the same distribution as the distance between groups. The plot shows the assumption of heterogeneity is upheld providing more support to the Adonis test.  
+
+```{r, echo=FALSE}
+set.seed(1)
+samdf = sample_data(ps_rarified)
+
+bray_ps = phyloseq::distance(ps_rarified, method = "bray")
+adonis(formula = bray_ps ~ samdf$NTM_culture, as(sample_data(ps_rarified), "data.frame"))
+
+beta <- betadisper(bray_ps, samdf$NTM_culture)
+beta.HSD <- TukeyHSD(beta)
+plot(beta.HSD, las=2)
+```
+
+
+
+### Taxa Boxplots
+The taxa boxplots are derived from classifications of the core variant sequences using the RDP Classifier from the Silva Database. The Phlyum and Genus Levels are presented. The number of samples in the metadata groups are not equally distributed and as such the graphics do not always have the same y axis value. 
+
+#### Phylum Biodiversity
+```{r warning=FALSE, echo=FALSE}
+b2 = tax_glom(ps_n, taxrank = "Phylum")
+Phylum10 = names(sort(taxa_sums(b2), TRUE)[1:6])
+x2 = prune_taxa(Phylum10, b2)
+
+## Add Grouped Column
+x = as.data.frame(otu_table(x2))
+x$Other = 1 - rowSums(x)
+y = tax_table(x2)
+taxax = as.data.frame(y@.Data)
+x = as.matrix(x)
+Other = data.frame(Kingdom="Other", Phylum="Other", Class=NA, Order=NA, Family=NA, Genus=NA)
+taxax = rbind(taxax, Other)
+rownames(taxax)[7] = "Other"
+top_Phylum = as.character(taxax$Phylum)
+taxax = as.matrix(taxax)
+samdf = sample_data(x2)
+
+
+## Create Phyloseq Object
+ps_x = phyloseq(otu_table(x,taxa_are_rows = F),sample_data(samdf), tax_table(taxax))
+
+
+
+## Group by Samdf Category
+#gp.norm_m =  merge_samples(ps_x, "NTM_Counts_Categories")
+gp.norm_m =  merge_samples(ps_x, "NTM_culture")
+sample_data(gp.norm_m)$NTM_culture <- factor(sample_names(gp.norm_m))
+
+## Normalize Counts
+ps_x2 = transform_sample_counts(gp.norm_m, function(x) x / sum(x) )
+```
+
+
+```{r fig.width=6, fig.height=8, echo=FALSE}
+png('../Images/PhylumCountCategoires.png', units="in", width=6, height=8, res=600)
+p = plot_bar(ps_x2, fill = "Phylum")
+p + geom_bar(aes(color=Phylum, fill=Phylum), stat="identity", position="stack", show.legend = F)+ scale_fill_discrete(breaks = top_Phylum)+ labs(title="Phylum Plot by Mycobacterium Culture Status")+ theme_bw() + theme(axis.text=element_text(size=18),axis.title=element_text(size=18), axis.text.x = element_text(angle = 0, hjust = .5, size = 16, face = "bold")) + xlab("") + ylab("Relative Abundance") + scale_x_discrete(labels= c(" Negative \nCulture", " Positive \nCulture"))
+dev.off()
+#+ scale_x_discrete(labels= c("Low", "High"))
+```
+
+
+
+#### Genus Biodiversity 
+```{r warning=FALSE, echo=FALSE}
+b2 = tax_glom(ps_n, taxrank = "Genus")
+Genus10 = names(sort(taxa_sums(b2), TRUE)[1:6])
+x2 = prune_taxa(Genus10, b2)
+
+## Add Grouped Column
+x = as.data.frame(otu_table(x2))
+x$Other = 1 - rowSums(x)
+
+
+x = as.matrix(x)
+taxax = as.data.frame(tax_table(x2))
+Other = data.frame(Kingdom="Other", Phylum="Other", Class="NA", Order="NA", Family="NA", Genus="Other")
+taxax = rbind(taxax, Other)
+rownames(taxax)[7] = "Other"
+top_Genus = as.character(taxax$Genus)
+taxax = as.matrix(taxax)
+samdf = sample_data(x2)
+
+
+## Create Phyloseq Object
+ps_x = phyloseq(otu_table(x,taxa_are_rows = F),sample_data(samdf), tax_table(taxax))
+
+## Group by Samdf Category
+gp.norm_m =  merge_samples(ps_x, "NTM_culture")
+sample_data(gp.norm_m)$NTM_culture <- factor(sample_names(gp.norm_m))
+
+## Normalize Counts
+ps_x2 = transform_sample_counts(gp.norm_m, function(x) x / sum(x) )
+```
+
+
+### Mycobacterium Associated by Culture
+Neisseria, Staphylococcus, Streptococcus, Veillonella, Faecalibacterium, Rothia are the 6 genera both found in the taxa table and listed on the Strong Webpage. The Y axis is read count abundance in the rarified dataset. 
+
+```{r, echo=FALSE}
+Myco = subset_taxa(ps_rarified, Genus=="Mycobacterium")
+
+q = Myco@otu_table
+q = as.data.frame(q)
+values = rowSums(q)
+
+values
+
+df_soil2$Myco = values
+
+
+### Test Counts against pH, Culture Status, 
+x = lm(Myco~pH, df_soil2)
+summary(x)
+
+x = lm(Myco~NTM_culture, df_soil2)
+summary(x)
+
+
+
+#wilcox.test(NTM_Values ~ NTM_culture, new_df2)
+#wilcox.test(NTM_Values ~ NTM_culture, new_df2)
+
+
+
+lab = c("Low", "High")
+d = discretize(values, breaks = 2,labels = lab)
+
+
+#cols_to_remove = c("HIsoil04", "HIsoil09")
+#samdf = samdf[!(samdf$Description %in% cols_to_remove),]
+#samdf$NTM_Counts_Categories = d
+samdf$NTM_Values = values
+
+namesx = c("SampleName", "NTM_Counts_Categories")
+new_df = samdf[,namesx]
+
+namesy = c("SampleName", "NTM_Values", "NTM_culture")
+new_df2 = samdf[,namesy]
+
+p = plot_bar(Myco, x="NTM_culture", fill = "NTM_culture")
+
+p + geom_bar(aes(color=NTM_culture, fill=NTM_culture), stat="identity", position="stack", show.legend = F)+ scale_fill_discrete(breaks = "Mycobacterium") + labs(title="Total Mycobacterium Counts by NTM Culture") + theme(axis.text=element_text(size=18),axis.title=element_text(size=14,face="bold"), axis.text.x = element_text(angle = 0, hjust = .5)) + xlab("Mycobacterium Counts By Culture Status") + scale_x_discrete(labels= c("Negative", "Positive"))
+
+new_df2$NTM_culture = as.factor(new_df2$NTM_culture)
+#wilcox.test(NTM_Values ~ NTM_culture, new_df2)
+qplot(NTM_culture, NTM_Values, data=new_df2) + geom_boxplot()
+
+#write.csv(new_df, quote = FALSE, row.names = FALSE, file = "NTM_Count.csv")
+```
+
