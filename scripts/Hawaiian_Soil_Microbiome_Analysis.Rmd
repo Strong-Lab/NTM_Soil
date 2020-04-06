@@ -312,15 +312,15 @@ total_cis = rbind(total_cis, nos_vec)
 total_cis = nos_vec
 
 
-#png('../Images/AlphaDiversitybyCounts.png', units="in", width=5, height=8, res=600)
-# limits <- aes(ymax = total_cis$Upper_CI,ymin = total_cis$Lower_CI)
-# 
-# p <- ggplot(data = total_cis, aes(x = Feature, y = Mean, fill = Group))
-# p + geom_bar(stat = "identity",position = position_dodge(0.9), show.legend = F) + geom_errorbar(limits, position = position_dodge(0.9),width = 0.25) + geom_text(aes(Feature,-.1, label = Group), position = position_dodge2(width=0.9, padding = 2),  size=6) + scale_fill_manual(values=c("#4863A0", "#FFF380")) + theme_bw() + theme(axis.text.y = element_text(colour="grey20",size=18,angle=0,hjust=1,vjust=0,face="plain", family = "Arial"),
-#                                                                       axis.title.y = element_text(colour="grey20",size=18,angle=90,hjust=.5,vjust=.5,face="plain", family = "Arial"),
-#                                                                       axis.text.x = element_text(colour="grey20",size=18,angle=0,hjust=0.5,vjust=0,face="plain", family = "Arial"),
-#                                                                       axis.title.x = element_text(colour="grey20",size=18,angle=0,hjust=.5,vjust=.5,face="plain", family = "Arial")) + xlab("") + ylab("Shannon Diversity Index") +ggtitle("Alpha Diversity by Mycobacterium Count Category")
-# dev.off()
+png('../Images/SupplementaryFigure3A.png', units="in", width=5, height=8, res=600)
+limits <- aes(ymax = total_cis$Upper_CI,ymin = total_cis$Lower_CI)
+
+p <- ggplot(data = total_cis, aes(x = Feature, y = Mean, fill = Group))
+p + geom_bar(stat = "identity",position = position_dodge(0.9), show.legend = F) + geom_errorbar(limits, position = position_dodge(0.9),width = 0.25) + geom_text(aes(Feature,-.1, label = Group), position = position_dodge2(width=0.9, padding = 2),  size=6) + scale_fill_manual(values=c("#4863A0", "#FFF380")) + theme_bw() + theme(axis.text.y = element_text(colour="grey20",size=18,angle=0,hjust=1,vjust=0,face="plain", family = "Arial"),
+                                                                      axis.title.y = element_text(colour="grey20",size=18,angle=90,hjust=.5,vjust=.5,face="plain", family = "Arial"),
+                                                                      axis.text.x = element_text(colour="grey20",size=18,angle=0,hjust=0.5,vjust=0,face="plain", family = "Arial"),
+                                                                      axis.title.x = element_text(colour="grey20",size=18,angle=0,hjust=.5,vjust=.5,face="plain", family = "Arial")) + xlab("") + ylab("Shannon Diversity Index") +ggtitle("Alpha Diversity by Mycobacterium Count Category")
+dev.off()
 ```
 
 ### Beta Diversity
@@ -407,10 +407,10 @@ ps_x2 = transform_sample_counts(gp.norm_m, function(x) x / sum(x) )
 ```
 
 ```{r fig.width=6, fig.height=8, echo=FALSE}
-# png('../Images/TaxTablebyMycoCount.png', units="in", width=6, height=8, res=600)
-# p = plot_bar(ps_x2, fill = "Phylum")
-# p + theme_bw()+ geom_bar(aes(color=Phylum, fill=Phylum), stat="identity", position="stack", show.legend = F)+ scale_fill_discrete(breaks = top_Phylum)+ labs(title="Phylum Plot by Mycobacterium Count Category")+ theme_bw() + theme(axis.text=element_text(size=18),axis.title=element_text(size=18), axis.text.x = element_text(angle = 0, hjust = .5, size = 16, face = "bold")) + xlab("") + ylab("Relative Abundance") + scale_x_discrete(labels= c("High \nCounts", "Low \nCounts"))
-# dev.off()
+png('../Images/SupplementaryFigure3B.png', units="in", width=6, height=8, res=600)
+p = plot_bar(ps_x2, fill = "Phylum")
+p + theme_bw()+ geom_bar(aes(color=Phylum, fill=Phylum), stat="identity", position="stack", show.legend = F)+ scale_fill_discrete(breaks = top_Phylum)+ labs(title="Phylum Plot by Mycobacterium Count Category")+ theme_bw() + theme(axis.text=element_text(size=18),axis.title=element_text(size=18), axis.text.x = element_text(angle = 0, hjust = .5, size = 16, face = "bold")) + xlab("") + ylab("Relative Abundance") + scale_x_discrete(labels= c("High \nCounts", "Low \nCounts"))
+dev.off()
 ```
 
 
